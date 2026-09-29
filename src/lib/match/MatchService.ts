@@ -1,6 +1,10 @@
+import type { PageTransport } from "../http/PageTransport";
+import { SafeFetch } from "../http/SafeFetch";
 import { ProductFetcher } from "../product/ProductFetcher";
 import { ProductFetchError } from "../product/ProductFetchError";
+import { ProductColors } from "../product/ProductColors";
 import type { ProductInfo } from "../product/ProductInfo";
+import { StyleBrowse } from "../marketplaces/StyleBrowse";
 import { MarketplaceRegistry } from "../marketplaces/MarketplaceRegistry";
 import type { MarketplaceSearchResult } from "../marketplaces/Listing";
 
@@ -9,7 +13,14 @@ export type MatchErrorCode = "invalid_url" | "fetch_failed" | "not_a_product" | 
 export type MatchResponse =
   | {
       ok: true;
+      step: "color";
       product: ProductInfo;
+      results: [];
+    }
+  | {
+      ok: true;
+      step: "results";
+      product: ProductInfo | null;
       results: MarketplaceSearchResult[];
     }
   | {
@@ -18,21 +29,34 @@ export type MatchResponse =
     };
 
 export class MatchService {
-  static async match(input: unknown): Promise<MatchResponse> {
+  static async match(input: unknown, transport: PageTransport = SafeFetch): Promise<MatchResponse> {
     const parsed = MatchService.readInput(input);
     if (!parsed.valid) return { ok: false, error: parsed.error };
+    if (parsed.mode === "words") {
+      if (!parsed.query) {
+        return { ok: false, error: { code: "invalid_input", message: "Type a dress, like blue mini dress." } };
+      }
+      const results = await StyleBrowse.search(parsed.query, {
+        size: parsed.size,
+        color: null,
+        maxPrice: parsed.maxPrice,
+      }, transport);
+      return { ok: true, step: "results", product: null, results };
+    }
     try {
-      const product = await ProductFetcher.fetch(parsed.url);
+      const fetched = await ProductFetcher.fetch(parsed.url, transport);
+      const chosen = ProductColors.apply(fetched, parsed.color);
+      if (!chosen.ready) return { ok: true, step: "color", product: fetched, results: [] };
       const filters = {
         size: parsed.size,
-        color: parsed.color,
+        color: chosen.product.color,
         maxPrice: parsed.maxPrice,
       };
       const results: MarketplaceSearchResult[] = [];
       for (const provider of MarketplaceRegistry.providers()) {
-        results.push(await provider.search(product, filters));
+        results.push(await provider.search(chosen.product, filters, transport));
       }
-      return { ok: true, product, results };
+      return { ok: true, step: "results", product: chosen.product, results };
     } catch (error) {
       if (error instanceof ProductFetchError) {
         return { ok: false, error: { code: error.code, message: error.message } };
@@ -46,7 +70,9 @@ export class MatchService {
 
   private static readInput(input: unknown): {
     valid: true;
+    mode: "photo" | "words";
     url: string;
+    query: string | null;
     size: string | null;
     color: string | null;
     maxPrice: number | null;
@@ -58,6 +84,16 @@ export class MatchService {
       return { valid: false, error: { code: "invalid_input", message: "Send a product URL to search." } };
     }
     const body = input as Record<string, unknown>;
+    const mode = body.mode === "words" ? "words" : "photo";
+    if (mode === "words") {
+      const query = MatchService.optionalText(body.query, 120, "Dress type");
+      if (query instanceof Error) return { valid: false, error: { code: "invalid_input", message: query.message } };
+      const size = MatchService.optionalText(body.size, 40, "Size");
+      if (size instanceof Error) return { valid: false, error: { code: "invalid_input", message: size.message } };
+      const maxPrice = MatchService.optionalPrice(body.maxPrice);
+      if (maxPrice instanceof Error) return { valid: false, error: { code: "invalid_input", message: maxPrice.message } };
+      return { valid: true, mode, url: "", query, size, color: null, maxPrice };
+    }
     if (typeof body.url !== "string" || !body.url.trim()) {
       return { valid: false, error: { code: "invalid_input", message: "Paste a product URL." } };
     }
@@ -76,7 +112,7 @@ export class MatchService {
     if (maxPrice instanceof Error) {
       return { valid: false, error: { code: "invalid_input", message: maxPrice.message } };
     }
-    return { valid: true, url: body.url.trim(), size, color, maxPrice };
+    return { valid: true, mode, url: body.url.trim(), query: null, size, color, maxPrice };
   }
 
   private static optionalText(value: unknown, max: number, label: string): string | null | Error {

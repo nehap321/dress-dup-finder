@@ -12,7 +12,7 @@ import { SafeFetchError } from "./SafeFetchError";
 const execFileAsync = promisify(execFile);
 
 export class CurlPage {
-  static async get(rawUrl: string): Promise<FetchedPage> {
+  static async get(rawUrl: string, cookieJar?: string): Promise<FetchedPage> {
     const current = AddressPolicy.parse(rawUrl);
     await AddressPolicy.assertPublicDns(current.hostname);
     await RateLimiter.pace(current.hostname);
@@ -38,6 +38,7 @@ export class CurlPage {
           "Accept: text/html,application/json;q=0.9,*/*;q=0.8",
           "-H",
           "Accept-Language: en-US,en;q=0.9",
+          ...(cookieJar ? ["-c", cookieJar, "-b", cookieJar] : []),
           "-o",
           bodyPath,
           "-w",

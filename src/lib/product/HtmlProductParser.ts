@@ -30,11 +30,13 @@ export class HtmlProductParser {
     const color = JsonValue.string(record.color);
     const images = HtmlProductParser.imageList(record.image, pageUrl);
     const price = HtmlProductParser.offerPrice(record.offers);
+    const displayColor = color ? TextFormat.displayColor(color) : null;
     return {
       sourceUrl: pageUrl,
       title: HtmlProductParser.stripSiteSuffix(title, brand),
       brand,
-      color: color ? TextFormat.displayColor(color) : null,
+      color: displayColor,
+      colors: displayColor ? [{ name: displayColor, images }] : [],
       images,
       price,
       priceVaries: false,
@@ -70,11 +72,13 @@ export class HtmlProductParser {
       ? { amount, currency: currency && /^[A-Z]{3}$/i.test(currency) ? currency.toUpperCase() : null }
       : null;
     const brandName = brand ? TextFormat.displayBrand(brand) : null;
+    const displayColor = color ? TextFormat.displayColor(color) : null;
     return {
       sourceUrl: pageUrl,
       title: HtmlProductParser.stripSiteSuffix(TextFormat.cleanLine(titleRaw), brandName),
       brand: brandName,
-      color: color ? TextFormat.displayColor(color) : null,
+      color: displayColor,
+      colors: displayColor ? [{ name: displayColor, images }] : [],
       images,
       price,
       priceVaries: false,

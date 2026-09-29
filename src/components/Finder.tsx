@@ -6,58 +6,68 @@ import type { ProductInfo } from "@/lib/product/ProductInfo";
 import { TextFormat } from "@/lib/product/TextFormat";
 import { FormEvent, useState } from "react";
 
-const SAMPLES = [
+const PHOTO_SAMPLES = [
   {
     name: "Windsor",
-    detail: "Yellow formal dress",
+    detail: "One color, yellow",
     url: "https://www.windsorstore.com/products/polly-formal-high-slit-dress-050020089999",
     size: "S",
-    color: "yellow",
     maxPrice: "40",
   },
   {
-    name: "Princess Polly",
-    detail: "Polka-dot midi",
-    url: "https://us.princesspolly.com/products/down-with-love-asymmetrical-midi-dress-black-white-polka",
-    size: "US 4",
-    color: "black",
-    maxPrice: "50",
+    name: "Windsor floral",
+    detail: "Black, brown, or blue",
+    url: "https://www.windsorstore.com/products/grandeur-blooms-strapless-slit-floral-maxi-dress-051013386001",
+    size: "",
+    maxPrice: "",
   },
 ];
 
 export function Finder() {
+  const [mode, setMode] = useState<"photo" | "words">("photo");
   const [url, setUrl] = useState("");
+  const [query, setQuery] = useState("blue mini dress");
   const [size, setSize] = useState("");
-  const [color, setColor] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
+  const [color, setColor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [product, setProduct] = useState<ProductInfo | null>(null);
+  const [awaitingColor, setAwaitingColor] = useState(false);
   const [results, setResults] = useState<MarketplaceSearchResult[]>([]);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function search(next: { mode: "photo" | "words"; color?: string | null }) {
     setLoading(true);
     setError(null);
-    setProduct(null);
     setResults([]);
+    if (next.mode === "words") setAwaitingColor(false);
     try {
       const response = await fetch("/api/match", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url,
+          mode: next.mode,
+          url: next.mode === "photo" ? url : null,
+          query: next.mode === "words" ? query : null,
           size: size.trim() || null,
-          color: color.trim() || null,
+          color: next.color ?? null,
           maxPrice: maxPrice.trim() === "" ? null : Number(maxPrice),
         }),
       });
       const payload = (await response.json()) as MatchResponse;
       if (!payload.ok) {
+        setProduct(null);
+        setAwaitingColor(false);
         setError(payload.error.message);
         return;
       }
       setProduct(payload.product);
+      if (payload.step === "color") {
+        setAwaitingColor(true);
+        setColor(null);
+        return;
+      }
+      setAwaitingColor(false);
       setResults(payload.results);
     } catch {
       setError("The search didn't finish. Check your connection and try again.");
@@ -66,27 +76,78 @@ export function Finder() {
     }
   }
 
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAwaitingColor(false);
+    void search({ mode, color: null });
+  }
+
   return (
     <>
+      <div className="tabs" role="tablist">
+        <button
+          type="button"
+          role="tab"
+          className={mode === "photo" ? "tab active" : "tab"}
+          aria-selected={mode === "photo"}
+          onClick={() => {
+            setMode("photo");
+            setError(null);
+            setResults([]);
+            setAwaitingColor(false);
+          }}
+        >
+          From a dress link
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={mode === "words" ? "tab active" : "tab"}
+          aria-selected={mode === "words"}
+          onClick={() => {
+            setMode("words");
+            setError(null);
+            setResults([]);
+            setProduct(null);
+            setAwaitingColor(false);
+          }}
+        >
+          By dress type
+        </button>
+      </div>
+
       <form className="panel" onSubmit={onSubmit}>
-        <label className="field">
-          <span>Product URL</span>
-          <input
-            name="url"
-            type="url"
-            inputMode="url"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            placeholder="https://www.windsorstore.com/products/…"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            required
-          />
-        </label>
+        {mode === "photo" ? (
+          <label className="field">
+            <span>Product URL</span>
+            <input
+              name="url"
+              type="url"
+              inputMode="url"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              placeholder="https://www.windsorstore.com/products/…"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              required
+            />
+          </label>
+        ) : (
+          <label className="field">
+            <span>Dress type</span>
+            <input
+              name="query"
+              placeholder="blue mini dress"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              required
+            />
+          </label>
+        )}
         <div className="filters">
           <label className="field">
-            <span>Size</span>
+            <span>Size (optional)</span>
             <input
               name="size"
               placeholder="S or US 4"
@@ -95,16 +156,7 @@ export function Finder() {
             />
           </label>
           <label className="field">
-            <span>Color</span>
-            <input
-              name="color"
-              placeholder="black"
-              value={color}
-              onChange={(event) => setColor(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Max price</span>
+            <span>Max price (optional)</span>
             <input
               name="maxPrice"
               type="number"
@@ -118,31 +170,42 @@ export function Finder() {
           </label>
         </div>
         <button className="submit" type="submit" disabled={loading}>
-          {loading ? "Comparing the photo…" : "Find a similar look"}
+          {loading ? "Looking…" : mode === "photo" ? "Find a similar look" : "Search secondhand"}
         </button>
         <p className="hint" role="status">
-          {loading
-            ? "Reading the dress photo, then searching for pictures that look like it."
-            : "Matches come from the photo. A brand-name search is not the result."}
+          {mode === "photo"
+            ? "Color comes from the product page. A card appears only when that listing shows the dress and a price."
+            : "Words only, like blue mini dress. Brand names are not added. Depop, Poshmark, and eBay are searched separately."}
         </p>
-        <div className="samples">
-          {SAMPLES.map((sample) => (
-            <button
-              key={sample.url}
-              className="sample"
-              type="button"
-              onClick={() => {
-                setUrl(sample.url);
-                setSize(sample.size);
-                setColor(sample.color);
-                setMaxPrice(sample.maxPrice);
-              }}
-            >
-              <strong>{sample.name}</strong>
-              <span className="sample-detail">{sample.detail}</span>
-            </button>
-          ))}
-        </div>
+        {mode === "photo" ? (
+          <div className="samples">
+            {PHOTO_SAMPLES.map((sample) => (
+              <button
+                key={sample.url}
+                className="sample"
+                type="button"
+                onClick={() => {
+                  setUrl(sample.url);
+                  setSize(sample.size);
+                  setMaxPrice(sample.maxPrice);
+                  setColor(null);
+                  setAwaitingColor(false);
+                }}
+              >
+                <strong>{sample.name}</strong>
+                <span className="sample-detail">{sample.detail}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="samples">
+            {["blue mini dress", "red / blue / gold / purple mini dress"].map((sample) => (
+              <button key={sample} className="sample" type="button" onClick={() => setQuery(sample)}>
+                <strong>{sample}</strong>
+              </button>
+            ))}
+          </div>
+        )}
       </form>
 
       {error ? (
@@ -152,27 +215,60 @@ export function Finder() {
       ) : null}
 
       {product ? <ProductSummary product={product} /> : null}
+
+      {awaitingColor && product && product.colors.length > 1 ? (
+        <section className="result-block">
+          <p className="kicker">Color on this page</p>
+          <h2>Which color?</h2>
+          <p className="notice">This dress comes in more than one color. Pick one. You do not have to guess.</p>
+          <div className="colors">
+            {product.colors.map((option) => (
+              <button
+                key={option.name}
+                type="button"
+                className={color === option.name ? "color-choice active" : "color-choice"}
+                disabled={loading}
+                onClick={() => {
+                  setColor(option.name);
+                  void search({ mode: "photo", color: option.name });
+                }}
+              >
+                {option.images[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={option.images[0]} alt="" />
+                ) : null}
+                <span>{option.name}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {results.map((result) => (
-        <MarketplaceResult key={result.marketplace} result={result} />
+        <MarketplaceResult key={result.marketplace} result={result} words={mode === "words"} />
       ))}
 
       <details className="why">
-        <summary>How the photo match works</summary>
+        <summary>How matching works</summary>
         <p>
-          The dress photo is sent to a reverse-image search. Google Lens is used when a SerpAPI key
-          is set. Otherwise Yandex Images&apos; public photo search is used. Results stay in the
-          order of visual similarity. Depop does not offer a public photo search, and this app does
-          not invent Depop listings when a lookalike isn&apos;t in the image index.
+          From a link, the color options are read off the product page. The dress photo is compared
+          with a reverse-image search, and a card is kept only when that listing page contains the
+          matched photo and states a price. By dress type, the words are sent to Depop, Poshmark,
+          and eBay. If a site blocks the server, that section says so instead of inventing listings.
         </p>
       </details>
     </>
   );
 }
 
-function resultHeading(result: MarketplaceSearchResult): string {
-  if (result.mode === "unavailable") return "Couldn't compare the photo";
-  if (result.listings.length === 0) return "No visual matches";
-  return "Dresses that look like this";
+function resultHeading(result: MarketplaceSearchResult, words: boolean): string {
+  if (!words) {
+    if (result.mode === "unavailable") return "Couldn't compare the photo";
+    if (result.listings.length === 0) return "No visual matches";
+    return "Dresses that look like this";
+  }
+  if (result.listings.length === 0) return `No ${result.label} listings`;
+  return result.label;
 }
 
 function ProductSummary({ product }: { product: ProductInfo }) {
@@ -183,7 +279,6 @@ function ProductSummary({ product }: { product: ProductInfo }) {
   return (
     <article className="product">
       {image ? (
-        // Brand and Depop image hosts are not known ahead of time, so this stays a plain image.
         // eslint-disable-next-line @next/next/no-img-element
         <img src={image} alt="" />
       ) : (
@@ -195,7 +290,8 @@ function ProductSummary({ product }: { product: ProductInfo }) {
         <ul className="facts">
           {product.brand ? <li>{product.brand}</li> : null}
           {product.color ? <li>{product.color}</li> : null}
-          {price ? <li>{product.price?.currency ? price : `Listed at ${price}`}</li> : null}
+          {product.colors.length > 1 && !product.color ? <li>{product.colors.length} colors</li> : null}
+          {price ? <li>{price}</li> : null}
         </ul>
         <a className="outbound" href={product.sourceUrl} target="_blank" rel="noopener noreferrer">
           View original listing
@@ -205,49 +301,38 @@ function ProductSummary({ product }: { product: ProductInfo }) {
   );
 }
 
-function MarketplaceResult({ result }: { result: MarketplaceSearchResult }) {
+function MarketplaceResult({ result, words }: { result: MarketplaceSearchResult; words: boolean }) {
+  const cards = result.listings.filter((listing) => listing.thumbnailUrl && listing.price);
   return (
     <section className="result-block">
       <p className="kicker">{result.label}</p>
-      <h2>{resultHeading(result)}</h2>
+      <h2>{resultHeading(result, words)}</h2>
       <p className="notice">{result.notice}</p>
-      {result.mode === "listings" && result.listings.length > 0 ? (
-        <>
-          <ul className="listings">
-            {result.listings.map((listing) => (
-              <li key={listing.url}>
-                <a className="listing" href={listing.url} target="_blank" rel="noopener noreferrer">
-                {listing.thumbnailUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img className="thumb" src={listing.thumbnailUrl} alt="" />
-                ) : (
-                    <div className="thumb placeholder">No photo</div>
-                  )}
-                  <div>
-                    <h3>{listing.title}</h3>
-                    <p className="price">
-                      {listing.price
-                        ? TextFormat.formatMoney(listing.price.amount, listing.price.currency)
-                        : "Price on the listing"}
-                    </p>
-                    <p className="meta">{listing.source ?? "Similar photo"}</p>
-                  </div>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </>
+      {cards.length > 0 ? (
+        <ul className="listings">
+          {cards.map((listing) => (
+            <li key={listing.url}>
+              <a className="listing" href={listing.url} target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="thumb" src={listing.thumbnailUrl ?? ""} alt="" />
+                <div>
+                  <h3>{listing.title}</h3>
+                  <p className="price">{TextFormat.formatMoney(listing.price?.amount ?? 0, listing.price?.currency ?? null)}</p>
+                  <p className="meta">
+                    {listing.source ?? result.label}
+                    {listing.size ? ` · ${listing.size}` : ""}
+                  </p>
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
       ) : null}
-      <details className="why">
-        <summary>Keyword search on Depop, last resort</summary>
-        <p>
-          This ignores the photo and searches words only. The brand name is left out. It is not a
-          visual match.
-        </p>
+      {words && result.mode === "unavailable" ? (
         <a className="outbound" href={result.searchUrl} target="_blank" rel="noopener noreferrer">
-          Open word search
+          Open {result.label}
         </a>
-      </details>
+      ) : null}
     </section>
   );
 }

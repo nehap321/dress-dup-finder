@@ -5,6 +5,7 @@ import { GoogleLensSearch } from "./GoogleLensSearch";
 import { SourcePagePicker } from "./SourcePagePicker";
 import { VisualMatchFilters } from "./VisualMatchFilters";
 import { VisualMatchFinder } from "./VisualMatchFinder";
+import { ListingPageProof } from "./ListingPageProof";
 import { YandexPageParser } from "./YandexPageParser";
 import { YandexVisualSearch } from "./YandexVisualSearch";
 
@@ -16,6 +17,7 @@ const dress: ProductInfo = {
   images: ["https://cdn.shopify.com/s/files/1/0070/8853/7651/products/05002-0089_1.jpg"],
   price: { amount: 9.97, currency: "USD" },
   priceVaries: false,
+  colors: [{ name: "Yellow", images: ["https://cdn.shopify.com/s/files/1/0070/8853/7651/products/05002-0089_1.jpg"] }],
 };
 
 const similarHtml = `
@@ -70,20 +72,39 @@ describe("visual match", () => {
     const image = dress.images[0] ?? "";
     const similarPage = YandexVisualSearch.pageUrl(image);
     const sitePage = YandexVisualSearch.pageUrl("https://zapaka.ca/cdn/shop/products/yellow-slit.jpg");
+    const productPage = "https://zapaka.ca/products/classic-a-line-v-neck-yellow-long-prom-dress-with-split-front";
     const result = await VisualMatchFinder.search(
       dress,
       { size: "S", color: "yellow", maxPrice: 40 },
       transport({
         [similarPage]: similarHtml,
         [sitePage]: sitesHtml,
+        [productPage]: `<meta property="og:type" content="product"><meta property="og:title" content="Classic A Line V Neck Yellow Long Prom Dress"><meta property="og:price:amount" content="22"><meta property="og:price:currency" content="USD"><img src="https://zapaka.ca/cdn/shop/products/yellow-slit.jpg">`,
       }),
     );
     expect(result.matchKind).toBe("visual");
     expect(result.listings.map((listing) => listing.url)).toEqual([
       "https://zapaka.ca/products/classic-a-line-v-neck-yellow-long-prom-dress-with-split-front",
     ]);
+    expect(result.listings[0]?.price).toEqual({ amount: 22, currency: "USD" });
+    expect(result.listings[0]?.thumbnailUrl).toContain("yellow-slit.jpg");
     expect(result.searchUrl.toLowerCase()).not.toContain("windsor");
     expect(result.notice.toLowerCase()).toContain("photo");
+  });
+
+  it("drops a page that does not contain the matched photo", () => {
+    const html = `<meta property="og:type" content="product"><meta property="og:title" content="Other gown"><meta property="og:price:amount" content="30"><meta property="og:price:currency" content="USD"><img src="https://shop.example/cdn/other-gown.jpg">`;
+    expect(
+      ListingPageProof.confirm(html, "https://shop.example/products/other", "https://cdn.example/yellow-slit-dress.jpg", "Other"),
+    ).toBeNull();
+    const kept = ListingPageProof.confirm(
+      `<meta property="og:type" content="product"><meta property="og:title" content="Yellow slit dress"><meta property="og:price:amount" content="30"><meta property="og:price:currency" content="USD"><img src="https://shop.example/cdn/yellow-slit-dress.jpg">`,
+      "https://shop.example/products/yellow-slit-dress",
+      "https://cdn.example/yellow-slit-dress.jpg",
+      "Yellow slit dress",
+    );
+    expect(kept?.thumbnailUrl).toBe("https://shop.example/cdn/yellow-slit-dress.jpg");
+    expect(kept?.price).toEqual({ amount: 30, currency: "USD" });
   });
 
   it("follows a product image file to its product page", async () => {

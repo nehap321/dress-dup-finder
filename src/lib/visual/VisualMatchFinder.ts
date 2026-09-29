@@ -6,17 +6,12 @@ import type { ProductInfo } from "../product/ProductInfo";
 import type { MatchFilters } from "../search/SearchQuery";
 import { SearchQuery } from "../search/SearchQuery";
 import { GoogleLensSearch } from "./GoogleLensSearch";
+import { ListingPageProof } from "./ListingPageProof";
 import { VisualMatchFilters } from "./VisualMatchFilters";
 import { YandexVisualSearch } from "./YandexVisualSearch";
 
-const LENS_NOTICE =
-  "Matched from the dress photo with Google Lens. Results are ordered by visual similarity. Size, color, and max price only drop a result when that listing states a conflicting value. The brand name is not the search.";
-
-const YANDEX_NOTICE =
-  "Matched from the dress photo with Yandex Images reverse search, then kept only when a real product page was attached. Order follows how similar the photo looks. The brand name is not the search.";
-
 const EMPTY_NOTICE =
-  "The reverse-image search didn't return a product page that looks like this dress. No listings were invented.";
+  "No page both showed this dress photo and stated a price. Pages that failed that check were left out. Nothing was invented.";
 
 const FAIL_NOTICE =
   "The visual search didn't respond, so there are no lookalike listings to show. No listings were invented.";
@@ -51,26 +46,58 @@ export class VisualMatchFinder {
       if (GoogleLensSearch.isConfigured()) {
         try {
           const lens = await GoogleLensSearch.search(image, transport);
-          const filtered = VisualMatchFilters.apply(lens, filters, product);
+          const proved = await VisualMatchFinder.prove(lens, transport);
+          const filtered = VisualMatchFilters.apply(proved.listings, filters, product);
           if (filtered.length > 0) {
-            return { ...base, mode: "listings", listings: filtered, notice: LENS_NOTICE };
+            return { ...base, mode: "listings", listings: filtered, notice: VisualMatchFinder.notice(proved.omitted, "Google Lens") };
           }
         } catch {
           // A Lens failure still leaves the public reverse-image search.
         }
       }
       const looked = await YandexVisualSearch.listings(image, transport);
-      const listings = VisualMatchFinder.dropOriginal(looked, product);
-      const filtered = VisualMatchFilters.apply(listings, filters, product);
+      const proved = await VisualMatchFinder.prove(VisualMatchFinder.dropOriginal(looked, product), transport);
+      const filtered = VisualMatchFilters.apply(proved.listings, filters, product);
       return {
         ...base,
         mode: "listings",
         listings: filtered,
-        notice: filtered.length > 0 ? YANDEX_NOTICE : EMPTY_NOTICE,
+        notice: filtered.length > 0 ? VisualMatchFinder.notice(proved.omitted, "Yandex Images") : EMPTY_NOTICE,
       };
     } catch {
       return { ...base, mode: "unavailable", listings: [], notice: FAIL_NOTICE };
     }
+  }
+
+  private static async prove(
+    listings: Listing[],
+    transport: PageTransport,
+  ): Promise<{ listings: Listing[]; omitted: number }> {
+    const kept: Listing[] = [];
+    let omitted = 0;
+    for (const listing of listings) {
+      const matched = listing.thumbnailUrl;
+      if (!matched) {
+        omitted += 1;
+        continue;
+      }
+      const proved = await ListingPageProof.keep(listing, matched, transport);
+      if (!proved?.thumbnailUrl || !proved.price) {
+        omitted += 1;
+        continue;
+      }
+      kept.push(proved);
+      if (kept.length >= 6) break;
+    }
+    return { listings: kept, omitted };
+  }
+
+  private static notice(omitted: number, source: string): string {
+    const dropped =
+      omitted > 0
+        ? ` ${omitted} other page${omitted === 1 ? "" : "s"} ${omitted === 1 ? "was" : "were"} left out because the dress photo or a price was not on that page.`
+        : "";
+    return `Matched from the dress photo with ${source}. A card is shown only when that listing page contains the matched photo and states a price.${dropped} The brand name is not the search.`;
   }
 
   private static dropOriginal(listings: Listing[], product: ProductInfo): Listing[] {

@@ -22,7 +22,7 @@ Try a sample button, or paste one of these real product links:
 - `https://www.windsorstore.com/products/polly-formal-high-slit-dress-050020089999`
 - `https://us.princesspolly.com/products/down-with-love-asymmetrical-midi-dress-black-white-polka`
 
-Then add a size (for example `S` or `US 4`), a color, and a max price, and choose **Find a similar look**.
+Size and max price are optional. Choose **Find a similar look**. If the page has several colors, pick one. Or open **By dress type** and type something like `blue mini dress`.
 
 ```bash
 npm test
@@ -34,10 +34,10 @@ No API keys are required. The app runs with the defaults below if you never crea
 ## What you should see
 
 1. A card for the brand dress: title, brand, color, image, and store price when the page includes them.
-2. Cards for dresses that look like the photo: title, source site, thumbnail, price when the page states one, and a link to that product page. Ordered by visual similarity.
-3. A clear **No visual matches** state when the reverse-image search returns nothing useful. No prices or photos are invented.
-4. A collapsed **Keyword search on Depop, last resort** link. It searches style words from the title and leaves the brand name out. It is not the result.
-5. A clear error if the product URL is private, missing, or not a product page.
+2. If that page lists more than one color, buttons for those colors. The search waits until you pick one.
+3. Cards only when the listing page contains the matched photo and states a price. Each card shows that photo and the price.
+4. A **By dress type** tab for words such as `blue mini dress`. It asks Depop, Poshmark, and eBay separately, and sorts closer title matches that cost less first.
+5. A clear error if the product URL is private, missing, or not a product page. The previous dress card is cleared.
 
 ## Environment
 
@@ -63,9 +63,21 @@ The match is the dress photo:
 
 1. The brand page is read for its images (Shopify `/products/{handle}.js`, then JSON-LD / Open Graph).
 2. If `SERPAPI_API_KEY` is set, that photo is sent to [SerpAPI's Google Lens API](https://serpapi.com/google-lens-api) with `type=visual_matches`. Those are the results.
-3. If the key is unset, or Lens returns nothing, the photo is sent to Yandex Images' public reverse-image page (`https://yandex.com/images/search?rpt=imageview&url=...`). The similar-photo list is visual, not a brand keyword. Node's HTTP client is often redirected to a Yandex captcha on that page, so the server reads it with `curl` and the same identifiable user agent. It does not solve captchas or pretend to be a browser. Boards, image-only CDNs, and doorway titles are skipped. For the next lookalikes, the app reads which real product page Yandex attaches and keeps that page. Spam doorway sites and category indexes are dropped. Resale hosts such as Depop, Poshmark, Vinted, eBay, and ThredUp are preferred when they actually appear.
-4. Your size, color, and max price then remove a card only when that listing states a conflicting value. A photo with no written size is kept, because the size is not in the picture.
-5. A Depop word-search link is still built from the dress style (slit, midi, polka, and so on) plus color. The brand name is removed. It sits behind **Keyword search on Depop, last resort** and is never the main result.
+3. If the key is unset, or Lens returns nothing, the photo is sent to Yandex Images' public reverse-image page (`https://yandex.com/images/search?rpt=imageview&url=...`). Node's HTTP client is often redirected to a Yandex captcha on that page, so the server reads it with `curl` and the same identifiable user agent. It does not solve captchas.
+4. Each candidate page is opened. The card is kept only when that page's HTML contains the matched photo file and a price. The thumbnail is that listing's own image, not a search-engine preview. Pages that fail the check are counted in the notice and not shown.
+5. Size and max price are optional. Color is taken from the product page. A title that names a different color is dropped. A listing with no written size is kept.
+
+## Dress type search
+
+The second tab sends your words to three places. The brand name is not added.
+
+| Place | What this server can read |
+| --- | --- |
+| Depop | The public search URL. It usually returns HTTP 403. The tab says so and does not invent cards. |
+| Poshmark | The public `vm-rest/posts` feed, after a normal visit that sets cookies. Cards use each listing's cover photo and `price_amount`. |
+| eBay | eBay search returns HTTP 403 from this server. Cards are then read from [PicClick](https://picclick.com/)'s public eBay index: item number, photo, and price, linking to `ebay.com/itm/{id}`. |
+
+Results are sorted by how many of your words are in the title, then by price, lowest first. A card still needs both a photo and a price.
 
 A search can take a little while: one request for the dress, one for the similar-photo list, then up to eight page lookups, with the rate limit above. Successful responses are cached.
 

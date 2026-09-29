@@ -63,7 +63,7 @@ export class YandexVisualSearch {
       marketplace: "visual",
       title,
       url: pageUrl,
-      thumbnailUrl: thumb.thumbnailUrl,
+      thumbnailUrl: thumb.imageUrl,
       price: PriceMention.fromTitle(title),
       size: null,
       brand: null,

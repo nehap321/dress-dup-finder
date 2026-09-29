@@ -21,6 +21,7 @@ const dress: ProductInfo = {
   images: [],
   price: { amount: 9.97, currency: "USD" },
   priceVaries: false,
+  colors: [{ name: "Yellow", images: [] }],
 };
 
 function page(status: number, body: string, contentType = "text/html") {
@@ -259,6 +260,83 @@ describe("Depop search", () => {
     }));
     expect(result.mode).toBe("listings");
     expect(result.listings.map((listing) => listing.title)).toEqual(["Cheap yellow dress"]);
+  });
+});
+
+describe("style and color", () => {
+  it("asks which color when the product page lists several", async () => {
+    const url = "https://shop.example/products/floral-maxi";
+    const result = await MatchService.match(
+      { url },
+      transport({
+        [`${url}.js`]: {
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            title: "Floral Maxi",
+            vendor: "Windsor",
+            price: 4900,
+            options: [{ name: "Color", position: 1, values: ["BLACK", "BLUE"] }],
+            images: [],
+            variants: [
+              { id: 1, option1: "BLACK", featured_image: { src: "https://cdn.example/black.jpg" }, price: 4900 },
+              { id: 2, option1: "BLUE", featured_image: { src: "https://cdn.example/blue.jpg" }, price: 4900 },
+            ],
+          }),
+        },
+        "https://shop.example/meta.json": {
+          status: 200,
+          body: JSON.stringify({ currency: "USD" }),
+        },
+      }),
+    );
+    expect(result.ok && result.step).toBe("color");
+    if (result.ok && result.step === "color") {
+      expect(result.product.colors.map((color) => color.name)).toEqual(["Black", "Blue"]);
+      expect(result.product.colors[0]?.images).toEqual(["https://cdn.example/black.jpg"]);
+    }
+  });
+
+  it("reads Poshmark photos and prices and eBay index cards", async () => {
+    const { PoshmarkSearch } = await import("./marketplaces/PoshmarkSearch");
+    const { EbayIndexSearch } = await import("./marketplaces/EbayIndexSearch");
+    const { ListingOrder } = await import("./search/ListingOrder");
+    const posh = PoshmarkSearch.parse(
+      JSON.stringify({
+        data: [
+          {
+            id: "abc123",
+            title: "Blue satin mini dress",
+            price_amount: { val: "18.0", currency_code: "USD" },
+            cover_shot: { url_small: "https://cdn.example/blue-mini.jpg" },
+            inventory: { size_quantities: [{ size_obj: { display: "S", display_with_size_system: "US S" } }] },
+          },
+          { id: "nope", title: "No photo", price_amount: { val: "10", currency_code: "USD" } },
+        ],
+      }),
+    );
+    expect(posh).toHaveLength(1);
+    expect(posh[0]).toMatchObject({
+      price: { amount: 18, currency: "USD" },
+      thumbnailUrl: "https://cdn.example/blue-mini.jpg",
+      size: "US S",
+    });
+    const ebay = EbayIndexSearch.parseIndex(`
+      <ul>
+        <li id="item-123456789012"><img src="https://www.picclickimg.com/abc/Blue-Mini.webp" alt=""><h3>Blue satin mini dress</h3><div class="price"><strong>$15.00</strong> Buy It Now</div> See on eBay</li>
+        <li id="item-999">no price</li>
+      </ul>`);
+    expect(ebay.map((listing) => listing.url)).toEqual(["https://www.ebay.com/itm/123456789012"]);
+    expect(ebay[0]?.price).toEqual({ amount: 15, currency: "USD" });
+    const ordered = ListingOrder.byLookAndPrice(
+      [
+        { ...posh[0]!, title: "Red gown", price: { amount: 5, currency: "USD" } },
+        { ...posh[0]!, title: "Blue mini dress", url: "https://poshmark.com/listing/b", price: { amount: 40, currency: "USD" } },
+        { ...posh[0]!, title: "Blue mini dress cheap", url: "https://poshmark.com/listing/a", price: { amount: 12, currency: "USD" } },
+      ],
+      ["blue", "mini", "dress"],
+    );
+    expect(ordered.map((listing) => listing.price?.amount)).toEqual([12, 40, 5]);
   });
 });
 
