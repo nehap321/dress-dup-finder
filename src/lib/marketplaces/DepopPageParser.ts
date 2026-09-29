@@ -77,6 +77,7 @@ export class DepopPageParser {
       price: DepopPageParser.priceOf(product),
       size: sizes.length > 0 ? sizes.join(", ") : null,
       brand: brand ? TextFormat.displayBrand(brand) : null,
+      source: "depop.com",
     };
   }
 
@@ -187,6 +188,7 @@ export class DepopPageParser {
           : null,
       size: null,
       brand: null,
+      source: "depop.com",
     });
   }
 

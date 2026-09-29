@@ -1,7 +1,7 @@
 import type { PageTransport } from "../http/PageTransport";
 import type { ProductInfo } from "../product/ProductInfo";
 import type { MatchFilters } from "../search/SearchQuery";
-import { DepopMarketplace } from "./DepopMarketplace";
+import { VisualMatchFinder } from "../visual/VisualMatchFinder";
 import type { MarketplaceSearchResult } from "./Listing";
 
 export type MarketplaceProvider = {
@@ -16,6 +16,6 @@ export type MarketplaceProvider = {
 
 export class MarketplaceRegistry {
   static providers(): MarketplaceProvider[] {
-    return [DepopMarketplace];
+    return [VisualMatchFinder];
   }
 }

@@ -29,6 +29,11 @@ export class AppConfig {
     return allowed.has(raw) ? raw : "us";
   }
 
+  static serpApiKey(): string | null {
+    const key = process.env.SERPAPI_API_KEY?.trim();
+    return key ? key : null;
+  }
+
   static userAgent(): string {
     return "DressDupFinder/1.0 (+https://github.com/nehap321/dress-dup-finder; personal shopping lookup)";
   }

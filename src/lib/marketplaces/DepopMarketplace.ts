@@ -39,6 +39,7 @@ export class DepopMarketplace {
       query: query.text,
       broaderQuery: query.broaderText,
       currency,
+      matchKind: "keyword" as const,
     };
 
     try {

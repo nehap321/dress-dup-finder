@@ -118,12 +118,12 @@ export function Finder() {
           </label>
         </div>
         <button className="submit" type="submit" disabled={loading}>
-          {loading ? "Reading the dress…" : "Find Depop matches"}
+          {loading ? "Comparing the photo…" : "Find a similar look"}
         </button>
         <p className="hint" role="status">
           {loading
-            ? "Fetching the product page, then checking Depop."
-            : "One lookup at a time. If Depop blocks the server, you'll get a prefilled search link instead of fake results."}
+            ? "Reading the dress photo, then searching for pictures that look like it."
+            : "Matches come from the photo. A brand-name search is not the result."}
         </p>
         <div className="samples">
           {SAMPLES.map((sample) => (
@@ -157,12 +157,12 @@ export function Finder() {
       ))}
 
       <details className="why">
-        <summary>Why this might open Depop instead of showing listings</summary>
+        <summary>How the photo match works</summary>
         <p>
-          Depop&apos;s official API is for sellers, not for shopper search. A normal request from
-          this app to Depop&apos;s public search often comes back forbidden. When that happens,
-          Dress Dup does not guess listings. It builds a Depop search from the dress title and your
-          filters so you can open the live results yourself.
+          The dress photo is sent to a reverse-image search. Google Lens is used when a SerpAPI key
+          is set. Otherwise Yandex Images&apos; public photo search is used. Results stay in the
+          order of visual similarity. Depop does not offer a public photo search, and this app does
+          not invent Depop listings when a lookalike isn&apos;t in the image index.
         </p>
       </details>
     </>
@@ -170,9 +170,9 @@ export function Finder() {
 }
 
 function resultHeading(result: MarketplaceSearchResult): string {
-  if (result.mode === "unavailable") return "Open the live search";
-  if (result.listings.length === 0) return "No Depop matches";
-  return "Secondhand matches";
+  if (result.mode === "unavailable") return "Couldn't compare the photo";
+  if (result.listings.length === 0) return "No visual matches";
+  return "Dresses that look like this";
 }
 
 function ProductSummary({ product }: { product: ProductInfo }) {
@@ -228,34 +228,26 @@ function MarketplaceResult({ result }: { result: MarketplaceSearchResult }) {
                     <p className="price">
                       {listing.price
                         ? TextFormat.formatMoney(listing.price.amount, listing.price.currency)
-                        : "Price on Depop"}
+                        : "Price on the listing"}
                     </p>
-                    <p className="meta">
-                      {[listing.brand, listing.size ? `Size ${listing.size}` : null].filter(Boolean).join(" · ") ||
-                        "View on Depop"}
-                    </p>
+                    <p className="meta">{listing.source ?? "Similar photo"}</p>
                   </div>
                 </a>
               </li>
             ))}
           </ul>
-          <a className="outbound" href={result.searchUrl} target="_blank" rel="noopener noreferrer">
-            See the full Depop search
-          </a>
         </>
-      ) : (
-        <div className="actions">
-          <a className="action" href={result.searchUrl} target="_blank" rel="noopener noreferrer">
-            <strong>Search this on Depop</strong>
-            <span>Uses the dress title plus your size, color, and max price.</span>
-          </a>
-          <a className="action secondary" href={result.broaderSearchUrl} target="_blank" rel="noopener noreferrer">
-            <strong>Broader search</strong>
-            <span>{result.broaderQuery}</span>
-          </a>
-        </div>
-      )}
-      <p className="query">Query: {result.query}</p>
+      ) : null}
+      <details className="why">
+        <summary>Keyword search on Depop, last resort</summary>
+        <p>
+          This ignores the photo and searches words only. The brand name is left out. It is not a
+          visual match.
+        </p>
+        <a className="outbound" href={result.searchUrl} target="_blank" rel="noopener noreferrer">
+          Open word search
+        </a>
+      </details>
     </section>
   );
 }

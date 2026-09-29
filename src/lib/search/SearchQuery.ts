@@ -22,12 +22,11 @@ export class SearchQuery {
     const color = TextFormat.cleanLine(filters.color || product.color || "");
     const size = TextFormat.cleanLine(filters.size ?? "");
 
-    let text = title;
-    if (brand && !SearchQuery.contains(text, brand)) text = `${brand} ${text}`;
+    let text = brand ? SearchQuery.removePhrase(title, brand) : title;
     if (color && !SearchQuery.contains(text, color)) text = `${text} ${color}`;
+    if (!/dress/i.test(text)) text = `${text} dress`;
 
-    let broader = brand ? `${brand} dress` : SearchQuery.fallbackBroader(title);
-    if (color && !SearchQuery.contains(broader, color)) broader = `${broader} ${color}`;
+    const broader = SearchQuery.styleBroader(text, color);
 
     return {
       text: text.replace(/\s+/g, " ").trim(),
@@ -44,9 +43,17 @@ export class SearchQuery {
     return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:[^a-z0-9]|$)`, "i").test(haystack);
   }
 
-  private static fallbackBroader(title: string): string {
-    const words = title.split(/\s+/).filter(Boolean).slice(0, 4).join(" ");
-    if (!words) return "dress";
-    return /dress/i.test(words) ? words : `${words} dress`;
+  private static removePhrase(text: string, phrase: string): string {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return text.replace(new RegExp(`(?:^|\\s)${escaped}(?=\\s|$)`, "ig"), " ").replace(/\s+/g, " ").trim();
+  }
+
+  private static styleBroader(text: string, color: string): string {
+    const lower = text.toLowerCase();
+    const tokens = ["slit", "polka", "midi", "mini", "maxi", "slip", "cowl", "halter", "satin", "lace", "strapless"];
+    const found = tokens.filter((token) => lower.includes(token)).slice(0, 3);
+    const parts = found.length > 0 ? [...found, "dress"] : ["dress"];
+    if (color && !SearchQuery.contains(parts.join(" "), color)) parts.push(color);
+    return parts.join(" ");
   }
 }

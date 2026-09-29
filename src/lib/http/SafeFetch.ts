@@ -54,7 +54,8 @@ export class SafeFetch {
           body,
           contentType: response.headers.get("content-type") ?? "",
         };
-        const ttl = response.status === 200 ? AppConfig.cacheTtlMs() : response.status === 403 ? 60_000 : 0;
+        const challenged = /smartcaptcha|showcaptcha/i.test(body.slice(0, 5000));
+        const ttl = challenged ? 0 : response.status === 200 ? AppConfig.cacheTtlMs() : response.status === 403 ? 60_000 : 0;
         if (ttl > 0) MemoryCache.set(current.toString(), page, ttl);
         return page;
       }

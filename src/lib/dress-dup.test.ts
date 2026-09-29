@@ -146,15 +146,17 @@ describe("product parsers", () => {
 describe("Depop search", () => {
   it("builds a prefilled womenswear search from the dress and filters", () => {
     const query = SearchQuery.build(dress, { size: "S", color: "yellow", maxPrice: 40 });
-    expect(query.text).toBe("Windsor Polly Formal High Slit Dress yellow");
-    expect(query.broaderText).toBe("Windsor dress yellow");
+    expect(query.text).toBe("Polly Formal High Slit Dress yellow");
+    expect(query.text.toLowerCase()).not.toContain("windsor");
+    expect(query.broaderText).toBe("slit dress yellow");
     expect(DepopFilters.sizesParam("S")).toBe("US-S");
     expect(DepopFilters.sizesParam("US 4")).toBe("US-4");
     expect(DepopFilters.coloursParam("Black / White Polka Dot")).toBe("black,white");
 
     const specific = new URL(DepopSearchLink.specific(query));
     expect(specific.pathname).toBe("/us/search/");
-    expect(specific.searchParams.get("q")).toContain("Windsor Polly Formal High Slit Dress");
+    expect(specific.searchParams.get("q")).toContain("Polly Formal High Slit Dress");
+    expect(specific.searchParams.get("q")?.toLowerCase()).not.toContain("windsor");
     expect(specific.searchParams.get("q")).toContain("size S");
     expect(specific.searchParams.get("colours")).toBe("yellow");
     expect(specific.searchParams.get("sizes")).toBe("US-S");

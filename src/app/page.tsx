@@ -7,16 +7,16 @@ export default function HomePage() {
         <p className="eyebrow">Dress Dup</p>
         <h1>The same dress, for less.</h1>
         <p className="lede">
-          Paste a link from Windsor, Princess Polly, or another brand. Add your size, a color, and
-          the most you&apos;ll pay. Dress Dup reads the product page and looks for secondhand Depop
-          listings.
+          Paste a dress link. Dress Dup reads the product photo and looks for other dresses with a
+          similar shape, neckline, sleeve, slit, or pattern. Size, color, and max price narrow that
+          visual match. The brand name is not the search.
         </p>
       </header>
       <Finder />
       <footer className="foot">
         <p>
-          Personal shopping helper. No account, no checkout, and no invented listings. Depop opens
-          in a new tab when their site blocks a server search.
+          Personal shopping helper. No account, no checkout, and no invented listings. A word search
+          on Depop stays tucked away as a last resort.
         </p>
       </footer>
     </main>

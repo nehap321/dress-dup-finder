@@ -8,12 +8,14 @@ export type Listing = {
   price: Money | null;
   size: string | null;
   brand: string | null;
+  source: string | null;
 };
 
 export type MarketplaceSearchResult = {
   marketplace: string;
   label: string;
   mode: "listings" | "unavailable";
+  matchKind: "visual" | "keyword";
   listings: Listing[];
   searchUrl: string;
   broaderSearchUrl: string;
